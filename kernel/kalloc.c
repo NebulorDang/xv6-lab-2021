@@ -23,6 +23,16 @@ struct {
   struct run *freelist;
 } kmem;
 
+uint64 size_free(){
+  uint64 count = 0;
+  struct run *r = kmem.freelist;
+  while(r){
+    count++;
+    r = r->next;
+  }
+  return count * PGSIZE;
+}
+
 void
 kinit()
 {
