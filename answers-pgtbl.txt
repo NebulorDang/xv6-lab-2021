@@ -1,0 +1,2 @@
+1.The system calls that access the kernel data which the kernel maintains could be made faster using this shared page.
+2.Page0 maps the 'load program into memory' in exec, so it contains data and text, page2 contains the process's stack, can't read/write the memory mapped by page1 because it contains the guard page, the third to last pages contains the heap.
