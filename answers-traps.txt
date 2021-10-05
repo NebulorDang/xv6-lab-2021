@@ -1,0 +1,6 @@
+1.Register a2 holds 13 in main's call to printf.
+2.There is no call to function f in assembly code for main, compiler inlines fuctions and compute the result that f(8) + 1 = 12, then regard it as an immediate number, the address of the instruction is 26.
+3.ra = 0x30, jalr 1536(ra) # 0x630, so address that function printf located is 0x660.
+4.0x38, the address of the next instruction of jalr.
+5.Output is "HE110 World", Hex of 57616 is "e110", and 0x72, 0x6c, 0x64 is the ASCII of r, l, d, if big-endian, reverse to 0x726c6400, no need to change 57616.
+6.x=3 y=1, "y=" the answer is not specific, but in my enviroment y=1. 
