@@ -77,8 +77,17 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2){
+    if((++p->ticks ==  p->interval) && p->enable_handler){
+      p->enable_handler = 0;
+      p->ticks = 0;
+      p->alarm_trapframe = *(p->trapframe);
+      // No need to call mannually, just let pc point at which the handler point at
+      //(*(void(*)())(p->handler))();
+      p->trapframe->epc = p->handler;
+    }
     yield();
+  }
 
   usertrapret();
 }
