@@ -65,6 +65,40 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if(r_scause() == 13 || r_scause() == 15){
+    pte_t *pte;
+    uint64 va, pa;
+    uint flags;
+    char* mem;
+    va = r_stval();
+    //key point to pass usertests that whould fail while exceeding MAXVA or overflowing to gaurd page
+    if(va >= MAXVA || (va <= PGROUNDDOWN(p->trapframe->sp) && va >= PGROUNDDOWN(p->trapframe->sp)-PGSIZE)){
+      p->killed = 1;
+    }else{
+      va = PGROUNDDOWN(va);
+      if((pte = walk(p->pagetable, va, 0)) == 0)
+        p->killed = 1;
+      else{
+	if((*pte & PTE_COW) != 0){
+          if((mem = kalloc()) == 0){
+            p->killed = 1;
+          }else{
+            pa = PTE2PA(*pte);
+            *pte = ((*pte) | PTE_W) & (~PTE_COW);
+	    flags = PTE_FLAGS(*pte);
+	    memmove(mem, (char*)pa, PGSIZE);
+	    //key point to fix remmap panic
+            uvmunmap(p->pagetable, va, 1, 1);
+	    if(mappages(p->pagetable, va, PGSIZE, (uint64)mem, flags) != 0){
+              uvmunmap(p->pagetable, va, 1, 1);
+	      p->killed = 1;
+            }
+          }
+        }else{
+          p->killed = 1;
+        }
+      }
+    }
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
