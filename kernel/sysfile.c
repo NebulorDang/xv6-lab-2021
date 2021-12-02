@@ -16,6 +16,7 @@
 #include "file.h"
 #include "fcntl.h"
 
+#define min(a,b) ((a) < (b) ? (a) : (b))
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int
@@ -482,5 +483,102 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+uint64
+sys_mmap(void)
+{
+  struct proc *p = myproc();
+  uint64 addr;
+  int len;
+  int prot;
+  int flags;
+  int offset;
+  struct file *f;
+  if(argaddr(0, &addr) < 0 || argfd(4, 0, &f) < 0){
+    return -1;
+  }
+  if(argint(1, &len) < 0 || argint(2, &prot) < 0 || argint(3, &flags) < 0 || argint(5, &offset) < 0){
+    return -1;
+  }
+  //check the mmaptest.c to solve
+  if(!f->writable && (prot & PROT_WRITE) && flags == MAP_SHARED) return -1;
+  for(int i = 0; i < MAXVMA; i++){
+    if(p->vma_table[i].mapped == 0){
+      p->vma_table[i].mapped = 1;
+      //if addr = 0, vma_table[i].addr is the top of heap (i.e. bottom of trapframe)
+      p->vma_table[i].addr = addr + p->sz;
+      p->vma_table[i].len = PGROUNDUP(len);
+      p->vma_table[i].prot = prot;
+      p->vma_table[i].flags = flags;
+      p->vma_table[i].offset = offset;
+      p->vma_table[i].f = filedup(f);
+      p->sz += PGROUNDUP(len);
+      return p->vma_table[i].addr;
+    }
+  }
+  return -1;
+}
+
+uint64
+munmap(uint64 addr, int len){
+  struct proc *p = myproc();
+  struct vma *pvma;
+  int i = 0;
+  for(; i < MAXVMA; i++){
+    pvma = &p->vma_table[i];
+    if(pvma->mapped == 1 && addr >= pvma->addr && ((addr + len) < (pvma->addr + pvma->len))){
+      break;
+    }
+  }
+  // not found
+  if(i > MAXVMA){
+    return -1;
+  }
+  int end = addr + len;
+  int _addr = addr;
+  //readonly file can be MAP_SHARED, so need another condition f->writable
+  if((pvma->flags == MAP_SHARED) && pvma->f->writable){
+  //steal from filewritei()
+    while(addr < end){
+       int size = min(end-addr, PGSIZE);
+       begin_op();
+       ilock(pvma->f->ip);
+       if(writei(pvma->f->ip, 1, addr, addr - pvma->addr, size) != size){
+         return -1;
+       }
+       iunlock(pvma->f->ip);
+       end_op();
+       uvmunmap(p->pagetable, addr, 1, 1);
+       addr += PGSIZE;
+    }
+  }
+
+  if(_addr == pvma->addr){
+    //head
+    pvma->addr += len;
+    pvma->len -= len;
+  }else if(_addr + len == pvma->addr + pvma->len){
+    //tail
+    pvma->len -= len;
+  }
+
+  if(pvma->len == 0 && pvma->mapped == 1){
+    fileundup(pvma->f);
+    pvma->mapped = 0;
+  }
+  return 0;
+}
+
+uint64
+sys_munmap(void)
+{
+  uint64 addr;
+  int len;
+  if(argaddr(0, &addr) < 0 || argint(1, &len) < 0){
+    return -1;
+  }
+  return munmap(addr, len);
   return 0;
 }
